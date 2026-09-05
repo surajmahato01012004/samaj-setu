@@ -10,6 +10,7 @@ const universityRoutes = require("./routes/universityRoutes");
 const industryRoutes = require("./routes/industryRoutes");
 const authorityRoutes = require("./routes/authorityRoutes");
 const challengeRoutes = require("./routes/challengeRoutes");
+const aiRoutes = require("./ai/aiRoutes");
 
 const app = express();
 
@@ -33,6 +34,9 @@ app.use("/api/authorities", authorityRoutes);
 
 // Challenge routes
 app.use("/api/challenges", challengeRoutes);
+
+// AI routes
+app.use("/api/ai", aiRoutes);
 
 connectDB();
 
