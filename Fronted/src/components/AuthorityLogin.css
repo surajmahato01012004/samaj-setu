@@ -1,0 +1,66 @@
+
+.authority-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f4f6f8;
+}
+
+.authority-card {
+  width: 380px;
+  padding: 35px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.authority-card h2 {
+  text-align: center;
+  margin-bottom: 10px;
+  font-size: 28px;
+}
+
+.authority-card p {
+  text-align: center;
+  color: #666;
+  margin-bottom: 25px;
+}
+
+.authority-card form {
+  display: flex;
+  flex-direction: column;
+}
+
+.authority-card label {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.authority-card input {
+  padding: 12px;
+  margin-bottom: 18px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 15px;
+  outline: none;
+}
+
+.authority-card input:focus {
+  border-color: #007bff;
+}
+
+.authority-card button {
+  padding: 12px;
+  border: none;
+  border-radius: 6px;
+  background-color: #007bff;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.authority-card button:hover {
+  background-color: #0056b3;
+}
+
