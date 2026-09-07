@@ -12,24 +12,37 @@ import {
 
 function AuthorityDashboard() {
 
-  const [universities, setUniversities] = useState([
-    "St. Thomas College",
-    "MAKAUT",
-    "Jadavpur University",
-  ]);
-
-  const [industries, setIndustries] = useState([
-    "TCS",
-    "Infosys",
-    "Wipro",
-  ]);
-
+  const [universities, setUniversities] = useState([]);
+  const [industries, setIndustries] = useState([]);
   const [complaints, setComplaints] = useState([]);
 
   useEffect(() => {
-    const data =
-      JSON.parse(localStorage.getItem("complaints")) || [];
-    setComplaints(data);
+    // Fetch Complaints
+    fetch("/api/complaints")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.data && data.data.length > 0) setComplaints(data.data);
+        else setComplaints(JSON.parse(localStorage.getItem("complaints")) || []);
+      })
+      .catch(() => setComplaints(JSON.parse(localStorage.getItem("complaints")) || []));
+
+    // Fetch Universities from MongoDB
+    fetch("/api/universities")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.data && data.data.length > 0) setUniversities(data.data.map((u) => u.name));
+        else setUniversities(["Jadavpur University", "IIT Kharagpur", "Anna University", "VJTI Mumbai"]);
+      })
+      .catch(() => setUniversities(["Jadavpur University", "IIT Kharagpur", "Anna University"]));
+
+    // Fetch Industries from MongoDB
+    fetch("/api/industries")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.data && data.data.length > 0) setIndustries(data.data.map((i) => i.companyName));
+        else setIndustries(["Tata Steel CSR", "Wipro Environmental", "L&T Infrastructure"]);
+      })
+      .catch(() => setIndustries(["Tata Steel CSR", "Wipro Environmental", "L&T Infrastructure"]));
   }, []);
 
   const addUniversity = () => {

@@ -15,16 +15,21 @@ function UniversityDashboard() {
     const [complaints, setComplaints] = useState([]);
 
 useEffect(() => {
-
-  const data =
-    JSON.parse(localStorage.getItem("complaints")) || [];
-
-  const assignedComplaints = data.filter(
-    (item) => item.assignedTo === "University"
-  );
-
-  setComplaints(assignedComplaints);
-
+  fetch("/api/complaints")
+    .then((res) => res.json())
+    .then((data) => {
+      const allComplaints = data.data || [];
+      if (allComplaints.length > 0) {
+        setComplaints(allComplaints);
+      } else {
+        const localData = JSON.parse(localStorage.getItem("complaints")) || [];
+        setComplaints(localData);
+      }
+    })
+    .catch(() => {
+      const localData = JSON.parse(localStorage.getItem("complaints")) || [];
+      setComplaints(localData);
+    });
 }, []);
 const navigate = useNavigate();
 

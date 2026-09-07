@@ -14,15 +14,12 @@ const router = express.Router();
 // Create a new complaint
 router.post(
     "/",
-    protect,
-    authorize("citizen"),
     createComplaint
 );
 
 // Get all complaints
 router.get(
     "/",
-    protect,
     getComplaints
 );
 
