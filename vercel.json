@@ -1,17 +1,10 @@
 {
-  "builds": [
+  "buildCommand": "cd Fronted && npm install && npm run build",
+  "outputDirectory": "Fronted/dist",
+  "rewrites": [
     {
-      "src": "Fronted/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/Fronted/$1"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
