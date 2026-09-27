@@ -18,7 +18,7 @@ function normalizeCategory(cat) {
     return "urban-infrastructure";
 }
 
-// CREATE A NEW COMPLAINT / POST WITH IMAGE ANALYSIS
+// CREATE A NEW COMPLAINT WITH GENUINE IMAGE ANALYSIS
 const createComplaint = async (req, res) => {
     try {
         const {
@@ -34,7 +34,6 @@ const createComplaint = async (req, res) => {
         // Check required fields
         if (!title || !description || !location) {
             return res.status(400).json({
-                success: false,
                 message: "Please provide title, description, and location"
             });
         }
@@ -45,7 +44,7 @@ const createComplaint = async (req, res) => {
         // Handle uploaded file if present
         if (req.file) {
             finalImageUrl = `/uploads/${req.file.filename}`;
-            analysisResults = await analyzeImage(req.file.path, req.file.originalname);
+            analysisResults = await analyzeImage(req.file.path, req.file.buffer || null);
         } else if (req.body.imageAnalysisResults) {
             try {
                 analysisResults = typeof req.body.imageAnalysisResults === "string" 
@@ -59,7 +58,7 @@ const createComplaint = async (req, res) => {
         const validCategory = normalizeCategory(category || (analysisResults[0] ? analysisResults[0].category : ""));
         const reportedById = (req.user && req.user.userId) ? req.user.userId : new mongoose.Types.ObjectId();
 
-        // Create complaint document with imageAnalysisResults
+        // Create complaint document preserving top-level complaint structure
         const complaint = await Complaint.create({
             title,
             description,
@@ -72,38 +71,30 @@ const createComplaint = async (req, res) => {
             reportedBy: reportedById
         });
 
+        // Exact response shape preserved for frontend compatibility
         res.status(201).json({
-            success: true,
             message: "Complaint submitted successfully",
-            data: {
-                complaint,
-                imageAnalysisResults: complaint.imageAnalysisResults
-            }
+            complaint
         });
 
     } catch (error) {
         console.error("Create complaint error:", error.message);
 
         res.status(500).json({
-            success: false,
             message: error.message || "Server error while creating complaint"
         });
     }
 };
 
 
-// GET ALL COMPLAINTS
+// GET ALL COMPLAINTS (Preserving top-level count & complaints)
 const getComplaints = async (req, res) => {
     try {
         const complaints = await Complaint.find()
             .sort({ createdAt: -1 });
 
         res.status(200).json({
-            success: true,
             count: complaints.length,
-            data: {
-                complaints
-            },
             complaints
         });
 
@@ -111,7 +102,6 @@ const getComplaints = async (req, res) => {
         console.error("Get complaints error:", error.message);
 
         res.status(500).json({
-            success: false,
             message: "Server error while fetching complaints"
         });
     }
@@ -123,22 +113,16 @@ const getComplaintById = async (req, res) => {
         const complaint = await Complaint.findById(req.params.id);
         if (!complaint) {
             return res.status(404).json({
-                success: false,
                 message: "Complaint not found"
             });
         }
 
         res.status(200).json({
-            success: true,
-            data: {
-                complaint,
-                imageAnalysisResults: complaint.imageAnalysisResults
-            }
+            complaint
         });
     } catch (error) {
         console.error("Get complaint by id error:", error.message);
         res.status(500).json({
-            success: false,
             message: "Server error while fetching complaint details"
         });
     }
@@ -153,7 +137,6 @@ const getMyComplaints = async (req, res) => {
         }).sort({ createdAt: -1 });
 
         res.status(200).json({
-            success: true,
             count: complaints.length,
             complaints
         });
@@ -162,7 +145,6 @@ const getMyComplaints = async (req, res) => {
         console.error("Get my complaints error:", error.message);
 
         res.status(500).json({
-            success: false,
             message: "Server error while fetching your complaints"
         });
     }

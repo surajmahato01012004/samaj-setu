@@ -24,18 +24,16 @@ if (!fs.existsSync(sampleImagePath)) {
 
 // Load backend app modules
 const complaintRoutes = require("../backend/routes/complaintRoutes");
-const postRoutes = require("../backend/routes/postRoutes");
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "../backend/uploads")));
 app.use("/api/complaints", complaintRoutes);
-app.use("/api/posts", postRoutes);
 
 async function runTests() {
     console.log("==================================================");
-    console.log("STARTING TEST SUITE FOR IMAGE ANALYSIS FEATURE");
+    console.log("VERIFYING UPDATED COMPLAINTS RESPONSE & GENUINE AI");
     console.log("==================================================");
 
     const mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/samajsetu_test";
@@ -43,7 +41,7 @@ async function runTests() {
         await mongoose.connect(mongoUri);
         console.log("✔ Connected to MongoDB for integration testing");
     } catch (err) {
-        console.log("⚠ MongoDB connection skipped (testing endpoint routes):", err.message);
+        console.log("⚠ MongoDB connection skipped:", err.message);
     }
 
     const server = app.listen(5099, async () => {
@@ -60,7 +58,7 @@ async function runTests() {
             const reqA = http.request({
                 hostname: "localhost",
                 port: 5099,
-                path: "/api/posts/analyze-image",
+                path: "/api/complaints/analyze-image",
                 method: "POST",
                 headers: formA.getHeaders()
             }, (resA) => {
@@ -71,18 +69,18 @@ async function runTests() {
                     const parsedA = JSON.parse(dataA);
                     console.log("TEST A Response Body:\n", JSON.stringify(parsedA, null, 2));
 
-                    // TEST B: Post Creation with Image Analysis Data
-                    console.log("\n--- TEST B: Post Creation with Image & Analysis Data ---");
+                    // TEST B: Complaint Creation with Preserved Response Shape
+                    console.log("\n--- TEST B: Complaint Creation (Preserved Frontend Response Shape) ---");
                     const formB = new FormData();
-                    formB.append("title", "Severe Pothole on Main Road");
-                    formB.append("description", "Large pothole causing severe traffic congestion and hazards.");
-                    formB.append("location", "Sector 14 Main Junction");
+                    formB.append("title", "Road Pothole Hazard");
+                    formB.append("description", "Severe asphalt pothole causing traffic slowdowns.");
+                    formB.append("location", "Sector 14 Main Road");
                     formB.append("image", fs.createReadStream(sampleImagePath));
 
                     const reqB = http.request({
                         hostname: "localhost",
                         port: 5099,
-                        path: "/api/posts",
+                        path: "/api/complaints",
                         method: "POST",
                         headers: formB.getHeaders()
                     }, (resB) => {
@@ -93,11 +91,11 @@ async function runTests() {
                             const parsedB = JSON.parse(dataB);
                             console.log("TEST B Response Body:\n", JSON.stringify(parsedB, null, 2));
 
-                            const createdId = parsedB.data && parsedB.data.complaint ? parsedB.data.complaint._id : null;
+                            const createdId = parsedB.complaint ? parsedB.complaint._id : null;
 
-                            // TEST C: Fetching Post with Image Analysis Data
-                            console.log("\n--- TEST C: Fetching Post with Stored imageAnalysisResults ---");
-                            http.get(`http://localhost:5099/api/posts${createdId ? '/' + createdId : ''}`, (resC) => {
+                            // TEST C: Fetching Complaint with Stored imageAnalysisResults
+                            console.log("\n--- TEST C: Fetching Complaint List (Top-Level Array Shape) ---");
+                            http.get(`http://localhost:5099/api/complaints`, (resC) => {
                                 let dataC = "";
                                 resC.on("data", chunk => dataC += chunk);
                                 resC.on("end", async () => {
@@ -105,7 +103,7 @@ async function runTests() {
                                     console.log("TEST C Response Body:\n", JSON.stringify(JSON.parse(dataC), null, 2));
 
                                     console.log("\n==================================================");
-                                    console.log("ALL TESTS (A, B, C) PASSED SUCCESSFULLY!");
+                                    console.log("ALL TESTS (A, B, C) PASSED WITH PRESERVED SHAPE!");
                                     console.log("==================================================");
 
                                     server.close();

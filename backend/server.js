@@ -7,7 +7,6 @@ const connectDB = require("./config/db");
 
 const authRoutes = require("./routes/authRoutes");
 const complaintRoutes = require("./routes/complaintRoutes");
-const postRoutes = require("./routes/postRoutes");
 const universityRoutes = require("./routes/universityRoutes");
 const industryRoutes = require("./routes/industryRoutes");
 const authorityRoutes = require("./routes/authorityRoutes");
@@ -26,9 +25,8 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // Authentication routes
 app.use("/api/auth", authRoutes);
 
-// Complaint & Post routes
+// Complaint routes (with integrated image analysis)
 app.use("/api/complaints", complaintRoutes);
-app.use("/api/posts", postRoutes);
 
 // University routes
 app.use("/api/universities", universityRoutes);
