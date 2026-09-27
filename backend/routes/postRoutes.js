@@ -3,14 +3,11 @@ const express = require("express");
 const {
     createComplaint,
     getComplaints,
-    getComplaintById,
-    getMyComplaints
+    getComplaintById
 } = require("../controllers/complaintController");
 
 const { analyzeImageUpload } = require("../controllers/imageAnalysisController");
 const upload = require("../middleware/uploadMiddleware");
-const { protect } = require("../middleware/authMiddleware");
-const { authorize } = require("../middleware/roleMiddleware");
 
 const router = express.Router();
 
@@ -21,31 +18,23 @@ router.post(
     analyzeImageUpload
 );
 
-// Test B: Create a new complaint / post with optional image upload
+// Test B: Create a new post / practice post with optional image upload
 router.post(
     "/",
     upload.single("image"),
     createComplaint
 );
 
-// Test C: Get all complaints
+// Test C: Get all posts
 router.get(
     "/",
     getComplaints
 );
 
-// Test C: Get complaint by ID
+// Test C: Get post by ID
 router.get(
     "/:id",
     getComplaintById
-);
-
-// Get complaints created by current user
-router.get(
-    "/my",
-    protect,
-    authorize("citizen"),
-    getMyComplaints
 );
 
 module.exports = router;
