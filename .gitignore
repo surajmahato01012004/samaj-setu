@@ -4,3 +4,4 @@ node_modules/
 ai_module.zip
 .DS_Store
 dist/
+scratch/test_assets/

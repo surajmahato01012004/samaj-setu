@@ -9,32 +9,33 @@ const {
 
 const { analyzeImageUpload } = require("../controllers/imageAnalysisController");
 const upload = require("../middleware/uploadMiddleware");
-const { protect } = require("../middleware/authMiddleware");
+const { protect, optionalProtect } = require("../middleware/authMiddleware");
 const { authorize } = require("../middleware/roleMiddleware");
 
 const router = express.Router();
 
-// Test A: Standalone Image Upload & AI Analysis
+// Standalone Image Upload & AI Vision Analysis
 router.post(
     "/analyze-image",
     upload.single("image"),
     analyzeImageUpload
 );
 
-// Test B: Create a new complaint / post with optional image upload
+// Create a new complaint with image upload & preserved auth protection
 router.post(
     "/",
+    optionalProtect,
     upload.single("image"),
     createComplaint
 );
 
-// Test C: Get all complaints
+// Get all complaints
 router.get(
     "/",
     getComplaints
 );
 
-// Test C: Get complaint by ID
+// Get complaint by ID
 router.get(
     "/:id",
     getComplaintById
