@@ -14,7 +14,7 @@ const protect = (req, res, next) => {
 
         const decoded = jwt.verify(
             token,
-            process.env.JWT_SECRET
+            process.env.JWT_SECRET || "samajsetu_secret_key_2026"
         );
 
         req.user = decoded;
@@ -28,6 +28,24 @@ const protect = (req, res, next) => {
     }
 };
 
+const optionalProtect = (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+            const token = authHeader.split(" ")[1];
+            const decoded = jwt.verify(
+                token,
+                process.env.JWT_SECRET || "samajsetu_secret_key_2026"
+            );
+            req.user = decoded;
+        }
+    } catch (error) {
+        // Silently skip if token invalid in optional mode
+    }
+    next();
+};
+
 module.exports = {
-    protect
+    protect,
+    optionalProtect
 };

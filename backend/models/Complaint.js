@@ -74,7 +74,33 @@ const complaintSchema = new mongoose.Schema(
             type: String,
             enum: ["low", "medium", "high", "critical"],
             default: "medium"
-        }
+        },
+
+        imageAnalysisResults: [
+            {
+                tag: {
+                    type: String,
+                    trim: true
+                },
+                confidence: {
+                    type: Number
+                },
+                category: {
+                    type: String,
+                    trim: true
+                },
+                description: {
+                    type: String,
+                    trim: true
+                },
+                detectedObjects: [
+                    {
+                        type: String,
+                        trim: true
+                    }
+                ]
+            }
+        ]
     },
     {
         timestamps: true

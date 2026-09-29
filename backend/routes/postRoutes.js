@@ -3,50 +3,38 @@ const express = require("express");
 const {
     createComplaint,
     getComplaints,
-    getComplaintById,
-    getMyComplaints
+    getComplaintById
 } = require("../controllers/complaintController");
 
 const { analyzeImageUpload } = require("../controllers/imageAnalysisController");
 const upload = require("../middleware/uploadMiddleware");
-const { protect, optionalProtect } = require("../middleware/authMiddleware");
-const { authorize } = require("../middleware/roleMiddleware");
 
 const router = express.Router();
 
-// Standalone Image Upload & AI Vision Analysis
+// Test A: Standalone Image Upload & AI Analysis
 router.post(
     "/analyze-image",
     upload.single("image"),
     analyzeImageUpload
 );
 
-// Create a new complaint with image upload & preserved auth protection
+// Test B: Create a new post / practice post with optional image upload
 router.post(
     "/",
-    optionalProtect,
     upload.single("image"),
     createComplaint
 );
 
-// Get all complaints
+// Test C: Get all posts
 router.get(
     "/",
     getComplaints
 );
 
-// Get complaint by ID
+// Test C: Get post by ID
 router.get(
     "/:id",
     getComplaintById
-);
-
-// Get complaints created by current user
-router.get(
-    "/my",
-    protect,
-    authorize("citizen"),
-    getMyComplaints
 );
 
 module.exports = router;
