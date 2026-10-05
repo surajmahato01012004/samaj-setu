@@ -33,18 +33,7 @@ function calculateJaccardSimilarity(textA, textB) {
  * and performing dynamic database matching against University & Industry collections.
  * 
  * Scores are calculated purely based on actual matching signals (no hardcoded/arbitrary baseline values).
- * 
- * Output Structure:
- * {
- *   category,
- *   subcategory,
- *   priority,
- *   summary,
- *   affectedGroups,
- *   requiredExpertise: [],
- *   universityRecommendations: [ { universityId, matchScore, matchedExpertise: [] } ],
- *   industryRecommendations: [ { industryId, matchScore, matchedCapabilities: [] } ]
- * }
+ * Organizations with ZERO matching signals are completely excluded.
  */
 async function generateStructuredAiAnalysis({ title, description, location, category, imageAnalysisResults }) {
     const fullText = `${title || ""} ${description || ""} ${location || ""}`.toLowerCase();
@@ -58,7 +47,9 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
 
     // 1. Category Normalization
     let finalCategory = "urban-infrastructure";
-    if (combinedText.includes("water") || combinedText.includes("pipe") || combinedText.includes("drain") || combinedText.includes("flood") || combinedText.includes("leakage")) {
+    if (combinedText.includes("school") || combinedText.includes("educat") || combinedText.includes("classroom") || combinedText.includes("student")) {
+        finalCategory = "education";
+    } else if (combinedText.includes("water") || combinedText.includes("pipe") || combinedText.includes("drain") || combinedText.includes("flood") || combinedText.includes("leakage") || combinedText.includes("waterlogging")) {
         finalCategory = "water";
     } else if (combinedText.includes("garbage") || combinedText.includes("waste") || combinedText.includes("trash") || combinedText.includes("dump") || combinedText.includes("sanitation")) {
         finalCategory = "sanitation";
@@ -66,8 +57,6 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
         finalCategory = "public-service";
     } else if (combinedText.includes("health") || combinedText.includes("hospital") || combinedText.includes("clinic")) {
         finalCategory = "healthcare";
-    } else if (combinedText.includes("school") || combinedText.includes("educat") || combinedText.includes("class")) {
-        finalCategory = "education";
     } else if (combinedText.includes("park") || combinedText.includes("tree") || combinedText.includes("pollution") || combinedText.includes("environment")) {
         finalCategory = "environment";
     } else if (combinedText.includes("farm") || combinedText.includes("crop") || combinedText.includes("agri")) {
@@ -80,20 +69,22 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
 
     // 2. Subcategory Extraction
     let subcategory = "General Infrastructure Repair";
-    if (combinedText.includes("pothole") || combinedText.includes("hole") || combinedText.includes("road") || combinedText.includes("asphalt") || combinedText.includes("crack")) {
-        subcategory = "Road Surface Pothole & Fracture";
-    } else if (combinedText.includes("water") || combinedText.includes("puddle") || combinedText.includes("flood") || combinedText.includes("pipeline")) {
+    if (finalCategory === "water" || combinedText.includes("leakage") || combinedText.includes("waterlogging") || combinedText.includes("pipeline")) {
         subcategory = "Urban Waterlogging & Pipeline Leakage";
-    } else if (combinedText.includes("garbage") || combinedText.includes("trash") || combinedText.includes("waste")) {
+    } else if (finalCategory === "education" || combinedText.includes("school") || combinedText.includes("classroom")) {
+        subcategory = "Educational Facilities & School Infrastructure Defect";
+    } else if (finalCategory === "sanitation" || combinedText.includes("garbage") || combinedText.includes("waste")) {
         subcategory = "Solid Waste Accumulation & Overflow";
-    } else if (combinedText.includes("wire") || combinedText.includes("electric") || combinedText.includes("light")) {
+    } else if (finalCategory === "public-service" || combinedText.includes("wire") || combinedText.includes("electric") || combinedText.includes("light")) {
         subcategory = "Hazardous Wiring & Street Lighting Defect";
+    } else if (combinedText.includes("pothole") || combinedText.includes("hole") || combinedText.includes("road") || combinedText.includes("asphalt") || combinedText.includes("crack")) {
+        subcategory = "Road Surface Pothole & Fracture";
     }
 
     // 3. Priority Auto-Scoring
     let priority = "medium";
     const criticalKeywords = ["hazard", "danger", "emergency", "sparking", "collapse", "severe", "overflow", "toxic"];
-    const highKeywords = ["pothole", "blocked", "heavy", "broken", "dark", "traffic", "leakage"];
+    const highKeywords = ["pothole", "blocked", "heavy", "broken", "dark", "traffic", "leakage", "burst", "waterlogging"];
     
     if (criticalKeywords.some(k => combinedText.includes(k))) {
         priority = "critical";
@@ -103,15 +94,16 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
 
     // 4. Affected Groups Identification
     const affectedGroupsSet = new Set();
+    if (finalCategory === "education" || combinedText.includes("school") || combinedText.includes("children") || combinedText.includes("student")) {
+        affectedGroupsSet.add("School Children & Students");
+        affectedGroupsSet.add("Teaching Staff");
+    }
     if (combinedText.includes("commuter") || combinedText.includes("road") || combinedText.includes("traffic") || combinedText.includes("vehicle") || combinedText.includes("asphalt")) {
         affectedGroupsSet.add("Daily Commuters");
         affectedGroupsSet.add("Vehicle Owners");
     }
-    if (combinedText.includes("resident") || combinedText.includes("colony") || combinedText.includes("street") || combinedText.includes("neighborhood")) {
+    if (combinedText.includes("resident") || combinedText.includes("colony") || combinedText.includes("street") || combinedText.includes("neighborhood") || combinedText.includes("water")) {
         affectedGroupsSet.add("Local Residents");
-    }
-    if (combinedText.includes("school") || combinedText.includes("children") || combinedText.includes("student")) {
-        affectedGroupsSet.add("School Children & Students");
     }
     if (combinedText.includes("shop") || combinedText.includes("market") || combinedText.includes("business")) {
         affectedGroupsSet.add("Local Businesses & Pedestrians");
@@ -129,10 +121,16 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
         expertiseSet.add("Road Infrastructure");
         expertiseSet.add("Structural Integrity");
         expertiseSet.add("Asphalt & Pavement Materials");
-    } else if (finalCategory === "water" || combinedText.includes("water") || combinedText.includes("pipe")) {
+    } else if (finalCategory === "water" || combinedText.includes("water") || combinedText.includes("pipe") || combinedText.includes("leakage")) {
         expertiseSet.add("Water Resource Management");
         expertiseSet.add("Hydraulics & Piping");
         expertiseSet.add("Environmental Engineering");
+        expertiseSet.add("Urban Drainage Systems");
+    } else if (finalCategory === "education" || combinedText.includes("school") || combinedText.includes("educat")) {
+        expertiseSet.add("Educational Infrastructure");
+        expertiseSet.add("Civil Engineering");
+        expertiseSet.add("Pedagogical Facilities");
+        expertiseSet.add("Child Safety Standards");
     } else if (finalCategory === "sanitation" || combinedText.includes("waste") || combinedText.includes("garbage")) {
         expertiseSet.add("Waste Management & Recycling");
         expertiseSet.add("Environmental Engineering");
@@ -150,7 +148,7 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
     const locStr = location ? ` at ${location}` : "";
     const summary = `AI Analysis: Identified ${finalCategory} issue (${subcategory})${locStr}. Flagged as ${priority} priority. Affecting ${affectedGroups.join(", ")}.`;
 
-    // 7. Dynamic Database Matching for Universities (Based ONLY on actual matching signals)
+    // 7. Dynamic Database Matching for Universities (Purely signal-based; exclude zero-matching signal orgs)
     let universityRecommendations = [];
     try {
         const universities = await University.find({ verificationStatus: { $ne: "Rejected" } });
@@ -173,9 +171,9 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
                     const overlapCount = matchedExpSet.size;
                     const matchFraction = requiredExpertise.length > 0 ? overlapCount / requiredExpertise.length : 0;
 
-                    // Match score based strictly on actual expertise overlap fraction & text similarity
+                    // Match score based purely on actual matching signals (expertise overlap & keyword similarity)
                     let computedScore = 0;
-                    if (overlapCount > 0 || jaccard > 0) {
+                    if (overlapCount > 0 || jaccard > 0.05) {
                         computedScore = Math.round((matchFraction * 0.7 + jaccard * 0.3) * 100) / 100;
                     }
 
@@ -185,7 +183,7 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
                         matchedExpertise: Array.from(matchedExpSet)
                     };
                 })
-                .filter(rec => rec.matchScore > 0); // Only return genuine matches with score > 0
+                .filter(rec => rec.matchScore > 0 && (rec.matchedExpertise.length > 0 || rec.matchScore >= 0.10)); // Exclude zero matching signal orgs
 
             // Sort descending by matchScore
             universityRecommendations.sort((a, b) => b.matchScore - a.matchScore);
@@ -194,7 +192,7 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
         console.warn("University DB matching warning:", err.message);
     }
 
-    // 8. Dynamic Database Matching for Industry Partners (Genuine capability matching only)
+    // 8. Dynamic Database Matching for Industry Partners (Purely signal-based; exclude zero-matching signal orgs)
     let industryRecommendations = [];
     try {
         const industries = await Industry.find({ verificationStatus: { $ne: "Rejected" } });
@@ -231,7 +229,7 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
                     const sectorMatch = sectors.some(s => s.toLowerCase().includes(finalCategory.toLowerCase()) || finalCategory.toLowerCase().includes(s.toLowerCase()));
 
                     let computedScore = 0;
-                    if (sectorMatch || matchedCapSet.size > 0 || jaccard > 0) {
+                    if ((sectorMatch && matchedCapSet.size > 0) || jaccard > 0.10) {
                         const sectorScore = sectorMatch ? 0.5 : 0;
                         const capScore = matchedCapSet.size > 0 ? Math.min(0.4, (matchedCapSet.size / Math.max(1, supports.length)) * 0.4) : 0;
                         computedScore = Math.round((sectorScore + capScore + jaccard * 0.3) * 100) / 100;
@@ -243,7 +241,7 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
                         matchedCapabilities: Array.from(matchedCapSet)
                     };
                 })
-                .filter(rec => rec.matchScore > 0); // Only return genuine matches with score > 0
+                .filter(rec => rec.matchScore > 0 && rec.matchedCapabilities.length > 0); // Exclude zero matching signal orgs
 
             // Sort descending by matchScore
             industryRecommendations.sort((a, b) => b.matchScore - a.matchScore);
