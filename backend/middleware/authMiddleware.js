@@ -10,15 +10,17 @@ const protect = (req, res, next) => {
             });
         }
 
-        const token = authHeader.split(" ")[1];
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+            return res.status(500).json({
+                message: "Server configuration error: JWT_SECRET missing"
+            });
+        }
 
-        const decoded = jwt.verify(
-            token,
-            process.env.JWT_SECRET || "samajsetu_secret_key_2026"
-        );
+        const token = authHeader.split(" ")[1];
+        const decoded = jwt.verify(token, jwtSecret);
 
         req.user = decoded;
-
         next();
 
     } catch (error) {
@@ -31,12 +33,10 @@ const protect = (req, res, next) => {
 const optionalProtect = (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
-        if (authHeader && authHeader.startsWith("Bearer ")) {
+        const jwtSecret = process.env.JWT_SECRET;
+        if (authHeader && authHeader.startsWith("Bearer ") && jwtSecret) {
             const token = authHeader.split(" ")[1];
-            const decoded = jwt.verify(
-                token,
-                process.env.JWT_SECRET || "samajsetu_secret_key_2026"
-            );
+            const decoded = jwt.verify(token, jwtSecret);
             req.user = decoded;
         }
     } catch (error) {

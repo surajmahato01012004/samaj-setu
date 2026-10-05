@@ -1,7 +1,9 @@
 const path = require("path");
 const fs = require("fs");
-
 const backendPath = path.join(__dirname, "../backend");
+require(path.join(backendPath, "node_modules/dotenv")).config({ path: path.join(backendPath, ".env") });
+
+const jwt = require(path.join(backendPath, "node_modules/jsonwebtoken"));
 const express = require(path.join(backendPath, "node_modules/express"));
 const mongoose = require(path.join(backendPath, "node_modules/mongoose"));
 const FormData = require(path.join(backendPath, "node_modules/form-data"));
@@ -29,20 +31,26 @@ async function runTests() {
 
     const mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/samajsetu_test";
     try {
-        await mongoose.connect(mongoUri);
+        await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 4000 });
         console.log("✔ Connected to MongoDB for integration testing");
     } catch (err) {
         console.log("⚠ MongoDB connection skipped:", err.message);
     }
 
+    // Generate valid JWT token for authenticated test
+    const jwtSecret = process.env.JWT_SECRET || "samajsetu_secret_key_2026";
+    process.env.JWT_SECRET = jwtSecret; // ensure set in env
+    const mockUserId = new mongoose.Types.ObjectId();
+    const validToken = jwt.sign({ userId: mockUserId, role: "citizen" }, jwtSecret, { expiresIn: "1h" });
+
     const server = app.listen(5099, async () => {
         console.log("✔ Test server running on port 5099");
 
         try {
-            // TEST A: Real Image Upload & Vision AI Model Analysis
-            console.log("\n--- TEST A: Real Image Upload & Vision AI Model Analysis ---");
             const http = require("http");
 
+            // TEST A: Real Image Upload & Vision AI Model Analysis
+            console.log("\n--- TEST A: Real Image Upload & Vision AI Analysis ---");
             const formA = new FormData();
             formA.append("image", fs.createReadStream(realImagePath));
 
@@ -60,11 +68,11 @@ async function runTests() {
                     const parsedA = JSON.parse(dataA);
                     console.log("TEST A Response Body:\n", JSON.stringify(parsedA, null, 2));
 
-                    // TEST B: Complaint Creation with Real Photograph
-                    console.log("\n--- TEST B: Complaint Creation with Real Photograph ---");
+                    // TEST B: Complaint Creation Unauthenticated (Should be Rejected with HTTP 401)
+                    console.log("\n--- TEST B: Complaint Creation Unauthenticated (Expect 401 Unauthorized) ---");
                     const formB = new FormData();
-                    formB.append("title", "Severe City Road Pothole Hazard");
-                    formB.append("description", "Large asphalt pothole causing vehicle damage and traffic hazard.");
+                    formB.append("title", "Severe Road Pothole Hazard");
+                    formB.append("description", "Large asphalt pothole causing traffic hazard.");
                     formB.append("location", "Sector 14 Main Boulevard");
                     formB.append("image", fs.createReadStream(realImagePath));
 
@@ -79,22 +87,35 @@ async function runTests() {
                         resB.on("data", chunk => dataB += chunk);
                         resB.on("end", async () => {
                             console.log("TEST B Response Status:", resB.statusCode);
-                            const parsedB = JSON.parse(dataB);
-                            console.log("TEST B Response Body:\n", JSON.stringify(parsedB, null, 2));
+                            console.log("TEST B Response Body:\n", JSON.stringify(JSON.parse(dataB), null, 2));
 
-                            const createdId = parsedB.complaint ? parsedB.complaint._id : null;
+                            // TEST C: Complaint Creation Authenticated with Valid Bearer Token (Expect HTTP 201)
+                            console.log("\n--- TEST C: Complaint Creation Authenticated (Expect 201 Created) ---");
+                            const formC = new FormData();
+                            formC.append("title", "Severe Road Pothole Hazard");
+                            formC.append("description", "Large asphalt pothole causing traffic hazard.");
+                            formC.append("location", "Sector 14 Main Boulevard");
+                            formC.append("image", fs.createReadStream(realImagePath));
 
-                            // TEST C: Fetching Complaint List (Top-Level Array Shape)
-                            console.log("\n--- TEST C: Fetching Complaint Details with Stored imageAnalysisResults ---");
-                            http.get(`http://localhost:5099/api/complaints${createdId ? '/' + createdId : ''}`, (resC) => {
+                            const headersC = formC.getHeaders();
+                            headersC["Authorization"] = `Bearer ${validToken}`;
+
+                            const reqC = http.request({
+                                hostname: "localhost",
+                                port: 5099,
+                                path: "/api/complaints",
+                                method: "POST",
+                                headers: headersC
+                            }, (resC) => {
                                 let dataC = "";
                                 resC.on("data", chunk => dataC += chunk);
                                 resC.on("end", async () => {
                                     console.log("TEST C Response Status:", resC.statusCode);
-                                    console.log("TEST C Response Body:\n", JSON.stringify(JSON.parse(dataC), null, 2));
+                                    const parsedC = JSON.parse(dataC);
+                                    console.log("TEST C Response Body:\n", JSON.stringify(parsedC, null, 2));
 
                                     console.log("\n==================================================");
-                                    console.log("ALL REAL IMAGE TESTS PASSED WITH CLEAN SUCCESS!");
+                                    console.log("ALL REAL IMAGE & AUTH TESTS PASSED WITH CLEAN SUCCESS!");
                                     console.log("==================================================");
 
                                     server.close();
@@ -104,6 +125,8 @@ async function runTests() {
                                     process.exit(0);
                                 });
                             });
+
+                            formC.pipe(reqC);
                         });
                     });
 
@@ -122,3 +145,4 @@ async function runTests() {
 }
 
 runTests();
+

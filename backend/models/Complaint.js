@@ -33,6 +33,14 @@ const complaintSchema = new mongoose.Schema(
 
         location: {
             type: String,
+
+
+
+
+
+
+
+            
             required: true,
             trim: true
         },
@@ -100,7 +108,73 @@ const complaintSchema = new mongoose.Schema(
                     }
                 ]
             }
-        ]
+        ],
+
+        aiAnalysis: {
+            category: {
+                type: String,
+                trim: true
+            },
+            subcategory: {
+                type: String,
+                trim: true
+            },
+            priority: {
+                type: String,
+                enum: ["low", "medium", "high", "critical"],
+                default: "medium"
+            },
+            summary: {
+                type: String,
+                trim: true
+            },
+            affectedGroups: [
+                {
+                    type: String,
+                    trim: true
+                }
+            ],
+            requiredExpertise: [
+                {
+                    type: String,
+                    trim: true
+                }
+            ],
+            universityRecommendations: [
+                {
+                    universityId: {
+                        type: mongoose.Schema.Types.ObjectId,
+                        ref: "University"
+                    },
+                    matchScore: {
+                        type: Number
+                    },
+                    matchedExpertise: [
+                        {
+                            type: String,
+                            trim: true
+                        }
+                    ]
+                }
+            ],
+            industryRecommendations: [
+                {
+                    industryId: {
+                        type: mongoose.Schema.Types.ObjectId,
+                        ref: "Industry"
+                    },
+                    matchScore: {
+                        type: Number
+                    },
+                    matchedCapabilities: [
+                        {
+                            type: String,
+                            trim: true
+                        }
+                    ]
+                }
+            ]
+        }
     },
     {
         timestamps: true

@@ -21,10 +21,10 @@ router.post(
     analyzeImageUpload
 );
 
-// Create a new complaint with image upload & preserved auth protection
+// Create a new complaint with image upload & mandatory auth protection
 router.post(
     "/",
-    optionalProtect,
+    protect,
     upload.single("image"),
     createComplaint
 );

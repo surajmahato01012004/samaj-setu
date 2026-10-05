@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Complaint = require("../models/Complaint");
 const { analyzeImage } = require("../services/imageAnalysisService");
+const { generateStructuredAiAnalysis } = require("../services/structuredAiService");
 
 // Helper to normalize category string to valid schema enum
 function normalizeCategory(cat) {
@@ -18,7 +19,7 @@ function normalizeCategory(cat) {
     return "urban-infrastructure";
 }
 
-// CREATE A NEW COMPLAINT WITH GENUINE IMAGE ANALYSIS
+// CREATE A NEW COMPLAINT WITH GENUINE IMAGE ANALYSIS & STRUCTURED AI MATCHING
 const createComplaint = async (req, res) => {
     try {
         const {
@@ -55,10 +56,19 @@ const createComplaint = async (req, res) => {
             }
         }
 
-        const validCategory = normalizeCategory(category || (analysisResults[0] ? analysisResults[0].category : ""));
+        // Generate combined structured text + image AI analysis with dynamic DB matching
+        const aiAnalysis = await generateStructuredAiAnalysis({
+            title,
+            description,
+            location,
+            category,
+            imageAnalysisResults: analysisResults
+        });
+
+        const validCategory = normalizeCategory(category || aiAnalysis.category || (analysisResults[0] ? analysisResults[0].category : ""));
         const reportedById = (req.user && req.user.userId) ? req.user.userId : new mongoose.Types.ObjectId();
 
-        // Create complaint document preserving top-level complaint structure
+        // Create complaint document preserving top-level complaint structure, imageUrl, imageAnalysisResults, and aiAnalysis
         const complaint = await Complaint.create({
             title,
             description,
@@ -67,14 +77,17 @@ const createComplaint = async (req, res) => {
             latitude: latitude ? Number(latitude) : undefined,
             longitude: longitude ? Number(longitude) : undefined,
             imageUrl: finalImageUrl,
+            priority: aiAnalysis.priority || "medium",
             imageAnalysisResults: analysisResults,
+            aiAnalysis,
             reportedBy: reportedById
         });
 
-        // Exact response shape preserved for frontend compatibility
+        // Response shape preserving complaint document with aiAnalysis, imageUrl, imageAnalysisResults
         res.status(201).json({
             message: "Complaint submitted successfully",
-            complaint
+            complaint,
+            aiAnalysis
         });
 
     } catch (error) {
