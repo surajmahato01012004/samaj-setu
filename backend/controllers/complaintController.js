@@ -65,8 +65,14 @@ const createComplaint = async (req, res) => {
             imageAnalysisResults: analysisResults
         });
 
+        if (!req.user || (!req.user.userId && !req.user._id && !req.user.id)) {
+            return res.status(401).json({
+                message: "Not authorized. Please login."
+            });
+        }
+
         const validCategory = normalizeCategory(category || aiAnalysis.category || (analysisResults[0] ? analysisResults[0].category : ""));
-        const reportedById = (req.user && req.user.userId) ? req.user.userId : new mongoose.Types.ObjectId();
+        const reportedById = req.user.userId || req.user._id || req.user.id;
 
         // Create complaint document preserving top-level complaint structure, imageUrl, imageAnalysisResults, and aiAnalysis
         const complaint = await Complaint.create({

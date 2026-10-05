@@ -32,6 +32,8 @@ function calculateJaccardSimilarity(textA, textB) {
  * Generates structured AI output for SamajSetu complaints by combining text and image analysis,
  * and performing dynamic database matching against University & Industry collections.
  * 
+ * Scores are calculated purely based on actual matching signals (no hardcoded/arbitrary baseline values).
+ * 
  * Output Structure:
  * {
  *   category,
@@ -148,37 +150,42 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
     const locStr = location ? ` at ${location}` : "";
     const summary = `AI Analysis: Identified ${finalCategory} issue (${subcategory})${locStr}. Flagged as ${priority} priority. Affecting ${affectedGroups.join(", ")}.`;
 
-    // 7. Dynamic Database Matching for Universities (NO Hardcoded Scores)
+    // 7. Dynamic Database Matching for Universities (Based ONLY on actual matching signals)
     let universityRecommendations = [];
     try {
         const universities = await University.find({ verificationStatus: { $ne: "Rejected" } });
         if (universities && universities.length > 0) {
-            universityRecommendations = universities.map(uni => {
-                const uniDepts = uni.departments || [];
-                const uniExp = uni.expertise || [];
-                const uniResearch = uni.researchAreas || [];
-                const uniTags = [...uniDepts, ...uniExp, ...uniResearch];
-                
-                const matchedExpSet = new Set();
-                requiredExpertise.forEach(reqTag => {
-                    const isMatch = uniTags.some(t => t.toLowerCase().includes(reqTag.toLowerCase()) || reqTag.toLowerCase().includes(t.toLowerCase()));
-                    if (isMatch) matchedExpSet.add(reqTag);
-                });
+            universityRecommendations = universities
+                .map(uni => {
+                    const uniDepts = uni.departments || [];
+                    const uniExp = uni.expertise || [];
+                    const uniResearch = uni.researchAreas || [];
+                    const uniTags = [...uniDepts, ...uniExp, ...uniResearch];
+                    
+                    const matchedExpSet = new Set();
+                    requiredExpertise.forEach(reqTag => {
+                        const isMatch = uniTags.some(t => t.toLowerCase().includes(reqTag.toLowerCase()) || reqTag.toLowerCase().includes(t.toLowerCase()));
+                        if (isMatch) matchedExpSet.add(reqTag);
+                    });
 
-                const uniText = `${uni.name} ${uniTags.join(" ")}`.toLowerCase();
-                const jaccard = calculateJaccardSimilarity(combinedText, uniText);
-                const overlapCount = matchedExpSet.size;
-                const matchFraction = requiredExpertise.length > 0 ? overlapCount / requiredExpertise.length : 0.5;
+                    const uniText = `${uni.name} ${uniTags.join(" ")}`.toLowerCase();
+                    const jaccard = calculateJaccardSimilarity(combinedText, uniText);
+                    const overlapCount = matchedExpSet.size;
+                    const matchFraction = requiredExpertise.length > 0 ? overlapCount / requiredExpertise.length : 0;
 
-                // Compute dynamic match score (0.50 to 0.98)
-                const computedScore = Math.min(0.98, Math.max(0.50, Math.round((matchFraction * 0.6 + jaccard * 0.4 + 0.45) * 100) / 100));
+                    // Match score based strictly on actual expertise overlap fraction & text similarity
+                    let computedScore = 0;
+                    if (overlapCount > 0 || jaccard > 0) {
+                        computedScore = Math.round((matchFraction * 0.7 + jaccard * 0.3) * 100) / 100;
+                    }
 
-                return {
-                    universityId: uni._id,
-                    matchScore: computedScore,
-                    matchedExpertise: matchedExpSet.size > 0 ? Array.from(matchedExpSet) : [requiredExpertise[0] || "Civil Engineering"]
-                };
-            });
+                    return {
+                        universityId: uni._id,
+                        matchScore: computedScore,
+                        matchedExpertise: Array.from(matchedExpSet)
+                    };
+                })
+                .filter(rec => rec.matchScore > 0); // Only return genuine matches with score > 0
 
             // Sort descending by matchScore
             universityRecommendations.sort((a, b) => b.matchScore - a.matchScore);
@@ -187,37 +194,56 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
         console.warn("University DB matching warning:", err.message);
     }
 
-    // 8. Dynamic Database Matching for Industry Partners (NO Hardcoded Scores)
+    // 8. Dynamic Database Matching for Industry Partners (Genuine capability matching only)
     let industryRecommendations = [];
     try {
         const industries = await Industry.find({ verificationStatus: { $ne: "Rejected" } });
         if (industries && industries.length > 0) {
-            industryRecommendations = industries.map(ind => {
-                const sectors = ind.sector || [];
-                const supports = ind.supportOffered || [];
-                const indTags = [...sectors, ...supports];
+            industryRecommendations = industries
+                .map(ind => {
+                    const sectors = ind.sector || [];
+                    const supports = ind.supportOffered || [];
+                    const indTags = [...sectors, ...supports];
 
-                const matchedCapSet = new Set();
-                supports.forEach(sup => matchedCapSet.add(sup));
-                sectors.forEach(sec => {
-                    if (sec.toLowerCase().includes(finalCategory.toLowerCase()) || finalCategory.toLowerCase().includes(sec.toLowerCase())) {
-                        matchedCapSet.add(`${sec} Expertise`);
+                    const matchedCapSet = new Set();
+
+                    // Include sector ONLY if it genuinely matches complaint category or required expertise
+                    sectors.forEach(sec => {
+                        const secLower = sec.toLowerCase();
+                        const catMatch = secLower.includes(finalCategory.toLowerCase()) || finalCategory.toLowerCase().includes(secLower);
+                        const expMatch = requiredExpertise.some(exp => exp.toLowerCase().includes(secLower) || secLower.includes(exp.toLowerCase()));
+                        if (catMatch || expMatch) {
+                            matchedCapSet.add(`${sec} Sector Expertise`);
+                        }
+                    });
+
+                    // Include support capability ONLY if relevant to complaint text or required expertise
+                    supports.forEach(sup => {
+                        const supLower = sup.toLowerCase();
+                        const isRelevant = combinedText.includes(supLower) || requiredExpertise.some(exp => exp.toLowerCase().includes(supLower) || supLower.includes(exp.toLowerCase()));
+                        if (isRelevant) {
+                            matchedCapSet.add(sup);
+                        }
+                    });
+
+                    const indText = `${ind.companyName} ${indTags.join(" ")}`.toLowerCase();
+                    const jaccard = calculateJaccardSimilarity(combinedText, indText);
+                    const sectorMatch = sectors.some(s => s.toLowerCase().includes(finalCategory.toLowerCase()) || finalCategory.toLowerCase().includes(s.toLowerCase()));
+
+                    let computedScore = 0;
+                    if (sectorMatch || matchedCapSet.size > 0 || jaccard > 0) {
+                        const sectorScore = sectorMatch ? 0.5 : 0;
+                        const capScore = matchedCapSet.size > 0 ? Math.min(0.4, (matchedCapSet.size / Math.max(1, supports.length)) * 0.4) : 0;
+                        computedScore = Math.round((sectorScore + capScore + jaccard * 0.3) * 100) / 100;
                     }
-                });
 
-                const indText = `${ind.companyName} ${indTags.join(" ")}`.toLowerCase();
-                const jaccard = calculateJaccardSimilarity(combinedText, indText);
-                const sectorMatch = sectors.some(s => s.toLowerCase().includes(finalCategory.toLowerCase()) || finalCategory.toLowerCase().includes(s.toLowerCase()));
-
-                const baseScore = sectorMatch ? 0.75 : 0.50;
-                const computedScore = Math.min(0.98, Math.max(0.45, Math.round((baseScore + jaccard * 0.25) * 100) / 100));
-
-                return {
-                    industryId: ind._id,
-                    matchScore: computedScore,
-                    matchedCapabilities: Array.from(matchedCapSet)
-                };
-            });
+                    return {
+                        industryId: ind._id,
+                        matchScore: computedScore,
+                        matchedCapabilities: Array.from(matchedCapSet)
+                    };
+                })
+                .filter(rec => rec.matchScore > 0); // Only return genuine matches with score > 0
 
             // Sort descending by matchScore
             industryRecommendations.sort((a, b) => b.matchScore - a.matchScore);
