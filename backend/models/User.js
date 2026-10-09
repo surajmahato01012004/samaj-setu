@@ -27,6 +27,17 @@ const userSchema = new mongoose.Schema(
             required: true
         },
 
+        organizationId: {
+            type: mongoose.Schema.Types.ObjectId,
+            default: null
+        },
+
+        organizationType: {
+            type: String,
+            enum: ["University", "Industry", null],
+            default: null
+        },
+
         isVerified: {
             type: Boolean,
             default: false
