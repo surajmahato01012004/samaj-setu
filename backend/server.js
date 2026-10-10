@@ -10,6 +10,7 @@ const universityRoutes = require("./routes/universityRoutes");
 const industryRoutes = require("./routes/industryRoutes");
 const authorityRoutes = require("./routes/authorityRoutes");
 const challengeRoutes = require("./routes/challengeRoutes");
+const collaborationRoutes = require("./routes/collaborationRoutes");
 const aiRoutes = require("./ai/aiRoutes");
 
 const app = express();
@@ -17,25 +18,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Authentication routes
 app.use("/api/auth", authRoutes);
-
-// Complaint routes
 app.use("/api/complaints", complaintRoutes);
-
-// University routes
 app.use("/api/universities", universityRoutes);
-
-// Industry routes
 app.use("/api/industries", industryRoutes);
-
-// Authority routes
 app.use("/api/authorities", authorityRoutes);
-
-// Challenge routes
 app.use("/api/challenges", challengeRoutes);
-
-// AI routes
+app.use("/api/collaborations", collaborationRoutes);
 app.use("/api/ai", aiRoutes);
 
 connectDB();
