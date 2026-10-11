@@ -14,7 +14,7 @@ function tokenize(text) {
 }
 
 /**
- * Calculate Jaccard Token Similarity (0.0 to 1.0)
+ * Calculate Jaccard Token Similarity (0.00 to 1.00)
  */
 function calculateJaccardSimilarity(textA, textB) {
     const tokensA = new Set(tokenize(textA));
@@ -30,52 +30,78 @@ function calculateJaccardSimilarity(textA, textB) {
 
 /**
  * Generates structured AI output for SamajSetu complaints by combining text and image analysis,
- * and performing dynamic database matching against University & Industry collections.
+ * and performing dynamic database matching strictly against VERIFIED University & Industry collections.
  * 
- * Scores are calculated purely based on actual matching signals (no hardcoded/arbitrary baseline values).
- * Organizations with ZERO matching signals are completely excluded.
+ * Heuristic Ranking Score Formulas:
+ * ---------------------------------
+ * 1. University Match:
+ *    - Expertise Overlap Weight: 70% (0.70)
+ *    - Jaccard Text Similarity Weight: 30% (0.30)
+ *    - Total Weights: 100% (1.00)
+ *    - Formula: score = (matchedCount / totalRequired) * 0.70 + (jaccardSim * 0.30)
+ *    - Minimum Inclusion Threshold: >= 0.10
+ * 
+ * 2. Industry Partner Match:
+ *    - Sector Match Weight: 50% (0.50)
+ *    - Support Capability Match Weight: 30% (0.30)
+ *    - Jaccard Text Similarity Weight: 20% (0.20)
+ *    - Total Weights: 100% (1.00)
+ *    - Formula: score = (sectorMatched ? 0.50 : 0.0) + (matchedCapCount / totalOffered) * 0.30 + (jaccardSim * 0.20)
+ *    - Minimum Inclusion Threshold: >= 0.10
+ * 
+ * All scores are clamped strictly to the range [0.00, 1.00] and represent heuristic rankings.
  */
 async function generateStructuredAiAnalysis({ title, description, location, category, imageAnalysisResults }) {
-    const fullText = `${title || ""} ${description || ""} ${location || ""}`.toLowerCase();
+    const safeTitle = typeof title === "string" ? title : "";
+    const safeDescription = typeof description === "string" ? description : "";
+    const safeLocation = typeof location === "string" ? location : "";
+    const submittedCategory = typeof category === "string" ? category.toLowerCase().trim() : "";
+
+    const fullText = `${safeTitle} ${safeDescription} ${safeLocation}`.toLowerCase();
     
-    // Combine text keywords with vision AI detected objects/tags
-    const visionTags = Array.isArray(imageAnalysisResults) ? imageAnalysisResults.map(r => r.tag || "").join(" ") : "";
+    // Server-generated vision tags (only include if provided by server-side analyzeImage)
+    const visionTags = Array.isArray(imageAnalysisResults)
+        ? imageAnalysisResults.map(r => (r && typeof r.tag === "string" ? r.tag : "")).join(" ")
+        : "";
     const visionObjects = Array.isArray(imageAnalysisResults) && imageAnalysisResults[0] && Array.isArray(imageAnalysisResults[0].detectedObjects)
-        ? imageAnalysisResults[0].detectedObjects.join(" ")
+        ? imageAnalysisResults[0].detectedObjects.filter(o => typeof o === "string").join(" ")
         : "";
     const combinedText = `${fullText} ${visionTags} ${visionObjects}`.toLowerCase();
 
-    // 1. Category Normalization
-    let finalCategory = "urban-infrastructure";
+    // 1. Predicted Category Classification
+    let predictedCategory = "urban-infrastructure";
     if (combinedText.includes("school") || combinedText.includes("educat") || combinedText.includes("classroom") || combinedText.includes("student")) {
-        finalCategory = "education";
+        predictedCategory = "education";
     } else if (combinedText.includes("water") || combinedText.includes("pipe") || combinedText.includes("drain") || combinedText.includes("flood") || combinedText.includes("leakage") || combinedText.includes("waterlogging")) {
-        finalCategory = "water";
+        predictedCategory = "water";
     } else if (combinedText.includes("garbage") || combinedText.includes("waste") || combinedText.includes("trash") || combinedText.includes("dump") || combinedText.includes("sanitation")) {
-        finalCategory = "sanitation";
+        predictedCategory = "sanitation";
     } else if (combinedText.includes("wire") || combinedText.includes("light") || combinedText.includes("pole") || combinedText.includes("electric") || combinedText.includes("lamp")) {
-        finalCategory = "public-service";
+        predictedCategory = "public-service";
     } else if (combinedText.includes("health") || combinedText.includes("hospital") || combinedText.includes("clinic")) {
-        finalCategory = "healthcare";
+        predictedCategory = "healthcare";
     } else if (combinedText.includes("park") || combinedText.includes("tree") || combinedText.includes("pollution") || combinedText.includes("environment")) {
-        finalCategory = "environment";
+        predictedCategory = "environment";
     } else if (combinedText.includes("farm") || combinedText.includes("crop") || combinedText.includes("agri")) {
-        finalCategory = "agriculture";
+        predictedCategory = "agriculture";
     } else if (combinedText.includes("rural") || combinedText.includes("village") || combinedText.includes("livelihood")) {
-        finalCategory = "rural-livelihood";
+        predictedCategory = "rural-livelihood";
     } else if (combinedText.includes("ramp") || combinedText.includes("wheelchair") || combinedText.includes("access")) {
-        finalCategory = "accessibility";
+        predictedCategory = "accessibility";
     }
+
+    // Category reconciliation: Citizen's submitted category is authoritative if valid.
+    const isCategoryMatched = Boolean(submittedCategory && submittedCategory === predictedCategory);
 
     // 2. Subcategory Extraction
     let subcategory = "General Infrastructure Repair";
-    if (finalCategory === "water" || combinedText.includes("leakage") || combinedText.includes("waterlogging") || combinedText.includes("pipeline")) {
+    if (predictedCategory === "water" || combinedText.includes("leakage") || combinedText.includes("waterlogging") || combinedText.includes("pipeline")) {
         subcategory = "Urban Waterlogging & Pipeline Leakage";
-    } else if (finalCategory === "education" || combinedText.includes("school") || combinedText.includes("classroom")) {
+    } else if (predictedCategory === "education" || combinedText.includes("school") || combinedText.includes("classroom")) {
         subcategory = "Educational Facilities & School Infrastructure Defect";
-    } else if (finalCategory === "sanitation" || combinedText.includes("garbage") || combinedText.includes("waste")) {
+    } else if (predictedCategory === "sanitation" || combinedText.includes("garbage") || combinedText.includes("waste")) {
         subcategory = "Solid Waste Accumulation & Overflow";
-    } else if (finalCategory === "public-service" || combinedText.includes("wire") || combinedText.includes("electric") || combinedText.includes("light")) {
+    } else if (predictedCategory === "public-service" || combinedText.includes("wire") || combinedText.includes("electric") || combinedText.includes("light")) {
         subcategory = "Hazardous Wiring & Street Lighting Defect";
     } else if (combinedText.includes("pothole") || combinedText.includes("hole") || combinedText.includes("road") || combinedText.includes("asphalt") || combinedText.includes("crack")) {
         subcategory = "Road Surface Pothole & Fracture";
@@ -94,7 +120,7 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
 
     // 4. Affected Groups Identification
     const affectedGroupsSet = new Set();
-    if (finalCategory === "education" || combinedText.includes("school") || combinedText.includes("children") || combinedText.includes("student")) {
+    if (predictedCategory === "education" || combinedText.includes("school") || combinedText.includes("children") || combinedText.includes("student")) {
         affectedGroupsSet.add("School Children & Students");
         affectedGroupsSet.add("Teaching Staff");
     }
@@ -116,25 +142,25 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
 
     // 5. Required Expertise Tags Generation
     const expertiseSet = new Set();
-    if (finalCategory === "urban-infrastructure" || combinedText.includes("road") || combinedText.includes("pothole")) {
+    if (predictedCategory === "urban-infrastructure" || combinedText.includes("road") || combinedText.includes("pothole")) {
         expertiseSet.add("Civil Engineering");
         expertiseSet.add("Road Infrastructure");
         expertiseSet.add("Structural Integrity");
         expertiseSet.add("Asphalt & Pavement Materials");
-    } else if (finalCategory === "water" || combinedText.includes("water") || combinedText.includes("pipe") || combinedText.includes("leakage")) {
+    } else if (predictedCategory === "water" || combinedText.includes("water") || combinedText.includes("pipe") || combinedText.includes("leakage")) {
         expertiseSet.add("Water Resource Management");
         expertiseSet.add("Hydraulics & Piping");
         expertiseSet.add("Environmental Engineering");
         expertiseSet.add("Urban Drainage Systems");
-    } else if (finalCategory === "education" || combinedText.includes("school") || combinedText.includes("educat")) {
+    } else if (predictedCategory === "education" || combinedText.includes("school") || combinedText.includes("educat")) {
         expertiseSet.add("Educational Infrastructure");
         expertiseSet.add("Civil Engineering");
         expertiseSet.add("Pedagogical Facilities");
         expertiseSet.add("Child Safety Standards");
-    } else if (finalCategory === "sanitation" || combinedText.includes("waste") || combinedText.includes("garbage")) {
+    } else if (predictedCategory === "sanitation" || combinedText.includes("waste") || combinedText.includes("garbage")) {
         expertiseSet.add("Waste Management & Recycling");
         expertiseSet.add("Environmental Engineering");
-    } else if (finalCategory === "public-service" || combinedText.includes("wire") || combinedText.includes("light")) {
+    } else if (predictedCategory === "public-service" || combinedText.includes("wire") || combinedText.includes("light")) {
         expertiseSet.add("Electrical Engineering");
         expertiseSet.add("IoT Smart Lighting");
     }
@@ -145,19 +171,19 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
     const requiredExpertise = Array.from(expertiseSet);
 
     // 6. Summary Generation
-    const locStr = location ? ` at ${location}` : "";
-    const summary = `AI Analysis: Identified ${finalCategory} issue (${subcategory})${locStr}. Flagged as ${priority} priority. Affecting ${affectedGroups.join(", ")}.`;
+    const locStr = safeLocation ? ` at ${safeLocation}` : "";
+    const summary = `AI Analysis: Identified ${predictedCategory} issue (${subcategory})${locStr}. Flagged as ${priority} priority. Affecting ${affectedGroups.join(", ")}.`;
 
-    // 7. Dynamic Database Matching for Universities (Purely signal-based; exclude zero-matching signal orgs)
+    // 7. Dynamic Database Matching for Universities (Strictly VERIFIED organizations only)
     let universityRecommendations = [];
     try {
-        const universities = await University.find({ verificationStatus: { $ne: "Rejected" } });
+        const universities = await University.find({ verificationStatus: "Verified" });
         if (universities && universities.length > 0) {
             universityRecommendations = universities
                 .map(uni => {
-                    const uniDepts = uni.departments || [];
-                    const uniExp = uni.expertise || [];
-                    const uniResearch = uni.researchAreas || [];
+                    const uniDepts = Array.isArray(uni.departments) ? uni.departments.filter(d => typeof d === "string") : [];
+                    const uniExp = Array.isArray(uni.expertise) ? uni.expertise.filter(e => typeof e === "string") : [];
+                    const uniResearch = Array.isArray(uni.researchAreas) ? uni.researchAreas.filter(r => typeof r === "string") : [];
                     const uniTags = [...uniDepts, ...uniExp, ...uniResearch];
                     
                     const matchedExpSet = new Set();
@@ -166,56 +192,57 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
                         if (isMatch) matchedExpSet.add(reqTag);
                     });
 
-                    const uniText = `${uni.name} ${uniTags.join(" ")}`.toLowerCase();
+                    const uniText = `${uni.name || ""} ${uniTags.join(" ")}`.toLowerCase();
                     const jaccard = calculateJaccardSimilarity(combinedText, uniText);
                     const overlapCount = matchedExpSet.size;
                     const matchFraction = requiredExpertise.length > 0 ? overlapCount / requiredExpertise.length : 0;
 
-                    // Match score based purely on actual matching signals (expertise overlap & keyword similarity)
-                    let computedScore = 0;
+                    // Weights: 70% expertise overlap + 30% text similarity (Total: 100%)
+                    let rawScore = 0;
                     if (overlapCount > 0 || jaccard > 0.05) {
-                        computedScore = Math.round((matchFraction * 0.7 + jaccard * 0.3) * 100) / 100;
+                        rawScore = (matchFraction * 0.70) + (jaccard * 0.30);
                     }
+
+                    // Clamp to [0.00, 1.00]
+                    const clampedScore = Math.max(0.0, Math.min(1.0, Math.round(rawScore * 100) / 100));
 
                     return {
                         universityId: uni._id,
-                        matchScore: computedScore,
+                        name: uni.name || "University Partner",
+                        matchScore: clampedScore,
                         matchedExpertise: Array.from(matchedExpSet)
                     };
                 })
-                .filter(rec => rec.matchScore > 0 && (rec.matchedExpertise.length > 0 || rec.matchScore >= 0.10)); // Exclude zero matching signal orgs
+                .filter(rec => rec.matchScore >= 0.10 && rec.matchedExpertise.length > 0); // Minimum 0.10 threshold
 
-            // Sort descending by matchScore
             universityRecommendations.sort((a, b) => b.matchScore - a.matchScore);
         }
     } catch (err) {
         console.warn("University DB matching warning:", err.message);
     }
 
-    // 8. Dynamic Database Matching for Industry Partners (Purely signal-based; exclude zero-matching signal orgs)
+    // 8. Dynamic Database Matching for Industry Partners (Strictly VERIFIED organizations only)
     let industryRecommendations = [];
     try {
-        const industries = await Industry.find({ verificationStatus: { $ne: "Rejected" } });
+        const industries = await Industry.find({ verificationStatus: "Verified" });
         if (industries && industries.length > 0) {
             industryRecommendations = industries
                 .map(ind => {
-                    const sectors = ind.sector || [];
-                    const supports = ind.supportOffered || [];
+                    const sectors = Array.isArray(ind.sector) ? ind.sector.filter(s => typeof s === "string") : [];
+                    const supports = Array.isArray(ind.supportOffered) ? ind.supportOffered.filter(s => typeof s === "string") : [];
                     const indTags = [...sectors, ...supports];
 
                     const matchedCapSet = new Set();
 
-                    // Include sector ONLY if it genuinely matches complaint category or required expertise
                     sectors.forEach(sec => {
                         const secLower = sec.toLowerCase();
-                        const catMatch = secLower.includes(finalCategory.toLowerCase()) || finalCategory.toLowerCase().includes(secLower);
+                        const catMatch = secLower.includes(predictedCategory.toLowerCase()) || predictedCategory.toLowerCase().includes(secLower);
                         const expMatch = requiredExpertise.some(exp => exp.toLowerCase().includes(secLower) || secLower.includes(exp.toLowerCase()));
                         if (catMatch || expMatch) {
                             matchedCapSet.add(`${sec} Sector Expertise`);
                         }
                     });
 
-                    // Include support capability ONLY if relevant to complaint text or required expertise
                     supports.forEach(sup => {
                         const supLower = sup.toLowerCase();
                         const isRelevant = combinedText.includes(supLower) || requiredExpertise.some(exp => exp.toLowerCase().includes(supLower) || supLower.includes(exp.toLowerCase()));
@@ -224,26 +251,32 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
                         }
                     });
 
-                    const indText = `${ind.companyName} ${indTags.join(" ")}`.toLowerCase();
+                    const indText = `${ind.companyName || ""} ${indTags.join(" ")}`.toLowerCase();
                     const jaccard = calculateJaccardSimilarity(combinedText, indText);
-                    const sectorMatch = sectors.some(s => s.toLowerCase().includes(finalCategory.toLowerCase()) || finalCategory.toLowerCase().includes(s.toLowerCase()));
+                    const sectorMatch = sectors.some(s => s.toLowerCase().includes(predictedCategory.toLowerCase()) || predictedCategory.toLowerCase().includes(s.toLowerCase()));
 
-                    let computedScore = 0;
-                    if ((sectorMatch && matchedCapSet.size > 0) || jaccard > 0.10) {
-                        const sectorScore = sectorMatch ? 0.5 : 0;
-                        const capScore = matchedCapSet.size > 0 ? Math.min(0.4, (matchedCapSet.size / Math.max(1, supports.length)) * 0.4) : 0;
-                        computedScore = Math.round((sectorScore + capScore + jaccard * 0.3) * 100) / 100;
+                    // Weights: 50% sector match + 30% support capability fraction + 20% text similarity (Total: 100%)
+                    let rawScore = 0;
+                    if ((sectorMatch && matchedCapSet.size > 0) || jaccard > 0.05) {
+                        const sectorScore = sectorMatch ? 0.50 : 0.0;
+                        const capFraction = supports.length > 0 ? Math.min(1.0, matchedCapSet.size / supports.length) : (matchedCapSet.size > 0 ? 0.5 : 0.0);
+                        const capScore = capFraction * 0.30;
+                        const simScore = jaccard * 0.20;
+                        rawScore = sectorScore + capScore + simScore;
                     }
+
+                    // Clamp to [0.00, 1.00]
+                    const clampedScore = Math.max(0.0, Math.min(1.0, Math.round(rawScore * 100) / 100));
 
                     return {
                         industryId: ind._id,
-                        matchScore: computedScore,
+                        companyName: ind.companyName || "Industry Partner",
+                        matchScore: clampedScore,
                         matchedCapabilities: Array.from(matchedCapSet)
                     };
                 })
-                .filter(rec => rec.matchScore > 0 && rec.matchedCapabilities.length > 0); // Exclude zero matching signal orgs
+                .filter(rec => rec.matchScore >= 0.10 && rec.matchedCapabilities.length > 0); // Minimum 0.10 threshold
 
-            // Sort descending by matchScore
             industryRecommendations.sort((a, b) => b.matchScore - a.matchScore);
         }
     } catch (err) {
@@ -251,7 +284,9 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
     }
 
     return {
-        category: finalCategory,
+        category: submittedCategory || predictedCategory,
+        predictedCategory,
+        categoryMatch: isCategoryMatched,
         subcategory,
         priority,
         summary,

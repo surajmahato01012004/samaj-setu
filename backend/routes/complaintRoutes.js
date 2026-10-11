@@ -4,27 +4,30 @@ const {
     createComplaint,
     getComplaints,
     getComplaintById,
-    getMyComplaints
+    getMyComplaints,
+    updateComplaint
 } = require("../controllers/complaintController");
 
 const { analyzeImageUpload } = require("../controllers/imageAnalysisController");
 const upload = require("../middleware/uploadMiddleware");
-const { protect, optionalProtect } = require("../middleware/authMiddleware");
+const { protect } = require("../middleware/authMiddleware");
 const { authorize } = require("../middleware/roleMiddleware");
 
 const router = express.Router();
 
-// Standalone Image Upload & AI Vision Analysis
+// Standalone Image Upload & AI Vision Analysis (Protected)
 router.post(
     "/analyze-image",
+    protect,
     upload.single("image"),
     analyzeImageUpload
 );
 
-// Create a new complaint with image upload & mandatory auth protection
+// Create a new complaint with image upload (Auth runs BEFORE upload and AI)
 router.post(
     "/",
     protect,
+    authorize("citizen"),
     upload.single("image"),
     createComplaint
 );
@@ -32,13 +35,8 @@ router.post(
 // Get all complaints
 router.get(
     "/",
+    protect,
     getComplaints
-);
-
-// Get complaint by ID
-router.get(
-    "/:id",
-    getComplaintById
 );
 
 // Get complaints created by current user
@@ -47,6 +45,21 @@ router.get(
     protect,
     authorize("citizen"),
     getMyComplaints
+);
+
+// Get single complaint by ID
+router.get(
+    "/:id",
+    protect,
+    getComplaintById
+);
+
+// Authority assigns/updates a complaint (from backend-workflow)
+router.put(
+    "/:id",
+    protect,
+    authorize("authority", "university", "industry"),
+    updateComplaint
 );
 
 module.exports = router;
