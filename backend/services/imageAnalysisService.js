@@ -20,7 +20,14 @@ try {
 function getMobileNetModel() {
     if (!modelPromise && mobilenet) {
         console.log("🤖 Loading open-source MobileNet neural vision model...");
-        modelPromise = mobilenet.load({ version: 2, alpha: 1.0 });
+        const loadPromise = mobilenet.load({ version: 2, alpha: 1.0 });
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("MobileNet download timeout")), 5000)
+        );
+        modelPromise = Promise.race([loadPromise, timeoutPromise]).catch(err => {
+            console.warn("MobileNet load unavailable, falling back to Vision API:", err.message);
+            return null;
+        });
     }
     return modelPromise;
 }
@@ -89,11 +96,15 @@ async function analyzeImage(imageFilePath) {
             const imageTensor = bufferToTensor(imageBuffer);
             if (imageTensor) {
                 const model = await getMobileNetModel();
-                const predictions = await model.classify(imageTensor);
-                imageTensor.dispose(); // clean memory
+                if (model) {
+                    const predictions = await model.classify(imageTensor);
+                    imageTensor.dispose(); // clean memory
 
-                if (predictions && predictions.length > 0) {
-                    return mapPredictionsToCivicResults(predictions, fileSizeKB);
+                    if (predictions && predictions.length > 0) {
+                        return mapPredictionsToCivicResults(predictions, fileSizeKB);
+                    }
+                } else {
+                    imageTensor.dispose();
                 }
             }
         } catch (localErr) {
@@ -153,7 +164,8 @@ async function analyzeImage(imageFilePath) {
 function mapPredictionsToCivicResults(predictions, fileSizeKB) {
     const topPred = predictions[0];
     const className = topPred.className || "object";
-    const confidence = Math.round(topPred.probability * 100) / 100;
+    // Actual model probability without artificial inflation
+    const actualConfidence = Math.max(0, Math.min(1.0, Math.round(topPred.probability * 100) / 100));
     const detectedObjects = predictions.map(p => p.className.split(",")[0].trim());
 
     let tag = "Civic Infrastructure Defect";
@@ -177,9 +189,10 @@ function mapPredictionsToCivicResults(predictions, fileSizeKB) {
     return [
         {
             tag,
-            confidence: Math.max(confidence, 0.75),
+            confidence: actualConfidence, // True model probability
+            confidenceType: "model",
             category,
-            description: `Open-Source MobileNet Neural Model detected "${className}" (${Math.round(confidence * 100)}% model probability).`,
+            description: `Open-Source MobileNet Neural Model detected "${className}" (${Math.round(actualConfidence * 100)}% model probability).`,
             detectedObjects
         }
     ];
@@ -189,7 +202,9 @@ function createUnavailableResult(reason) {
     return [
         {
             tag: "Image Analysis Unavailable",
-            confidence: 0,
+            confidence: null,
+            heuristicConfidence: null,
+            confidenceType: "unavailable",
             category: "urban-infrastructure",
             description: `Image analysis unavailable: ${reason}`,
             detectedObjects: []
@@ -202,35 +217,37 @@ function parseVisionCaption(captionText, fileSizeKB) {
 
     let tag = "Civic Infrastructure Defect";
     let category = "urban-infrastructure";
-    let confidence = 0.95;
-    let detectedObjects = ["infrastructure", "defect area"];
+    let candidateKeywords = ["infrastructure", "defect area"];
 
     if (text.includes("pothole") || text.includes("hole") || text.includes("road") || text.includes("asphalt") || text.includes("street") || text.includes("pavement") || text.includes("ground") || text.includes("crack")) {
         tag = "Road Surface Pothole & Fracture";
         category = "urban-infrastructure";
-        confidence = 0.96;
-        detectedObjects = ["road", "asphalt", "hole", "pavement", "crack"];
+        candidateKeywords = ["road", "asphalt", "hole", "pavement", "crack", "street"];
     } else if (text.includes("water") || text.includes("puddle") || text.includes("flood") || text.includes("drain") || text.includes("stream") || text.includes("sewage")) {
         tag = "Water Logging & Pipeline Leakage";
         category = "water";
-        confidence = 0.94;
-        detectedObjects = ["water pool", "drainage", "puddle", "overflow"];
+        candidateKeywords = ["water pool", "drainage", "puddle", "overflow", "water", "flood"];
     } else if (text.includes("garbage") || text.includes("trash") || text.includes("dump") || text.includes("waste") || text.includes("rubbish") || text.includes("litter")) {
         tag = "Solid Waste & Overflowing Garbage Dump";
         category = "sanitation";
-        confidence = 0.95;
-        detectedObjects = ["garbage dump", "trash container", "waste debris"];
+        candidateKeywords = ["garbage dump", "trash container", "waste debris", "trash", "waste"];
     } else if (text.includes("wire") || text.includes("light") || text.includes("lamp") || text.includes("pole") || text.includes("electric")) {
         tag = "Hazardous Electrical Wiring & Light Failure";
         category = "public-service";
-        confidence = 0.93;
-        detectedObjects = ["electric pole", "exposed wire", "street lamp"];
+        candidateKeywords = ["electric pole", "exposed wire", "street lamp", "light", "wire"];
     }
+
+    const matchedKeywords = candidateKeywords.filter(kw => text.includes(kw.toLowerCase()));
+    const detectedObjects = matchedKeywords.length > 0 ? matchedKeywords : candidateKeywords.slice(0, 2);
+    // Calculated heuristic confidence based on proportion of matched domain keywords
+    const heuristicConfidence = Math.round((Math.min(1.0, (matchedKeywords.length / Math.max(1, candidateKeywords.length)) * 1.5)) * 100) / 100;
 
     return [
         {
             tag,
-            confidence,
+            confidence: null, // Caption model generates text, not class probabilities
+            heuristicConfidence, // Clearly labeled heuristic confidence derived from keyword matches
+            confidenceType: "heuristic",
             category,
             description: `Real Vision AI Model analyzed image content (${fileSizeKB}KB). Generated visual caption: "${captionText}".`,
             detectedObjects

@@ -232,34 +232,38 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
                     const supports = Array.isArray(ind.supportOffered) ? ind.supportOffered.filter(s => typeof s === "string") : [];
                     const indTags = [...sectors, ...supports];
 
-                    const matchedCapSet = new Set();
-
+                    const matchedSectors = new Set();
                     sectors.forEach(sec => {
                         const secLower = sec.toLowerCase();
                         const catMatch = secLower.includes(predictedCategory.toLowerCase()) || predictedCategory.toLowerCase().includes(secLower);
                         const expMatch = requiredExpertise.some(exp => exp.toLowerCase().includes(secLower) || secLower.includes(exp.toLowerCase()));
                         if (catMatch || expMatch) {
-                            matchedCapSet.add(`${sec} Sector Expertise`);
+                            matchedSectors.add(sec);
                         }
                     });
 
+                    const matchedCapabilities = new Set();
                     supports.forEach(sup => {
                         const supLower = sup.toLowerCase();
-                        const isRelevant = combinedText.includes(supLower) || requiredExpertise.some(exp => exp.toLowerCase().includes(supLower) || supLower.includes(exp.toLowerCase()));
+                        const isRelevant = combinedText.includes(supLower) ||
+                            requiredExpertise.some(exp => exp.toLowerCase().includes(supLower) || supLower.includes(exp.toLowerCase())) ||
+                            (supLower.includes("equipment") && (combinedText.includes("pothole") || combinedText.includes("road") || combinedText.includes("pipe") || combinedText.includes("machin") || combinedText.includes("repair") || combinedText.includes("infra"))) ||
+                            (supLower.includes("grant") || supLower.includes("funding")) ||
+                            (supLower.includes("technology") && (combinedText.includes("water") || combinedText.includes("iot") || combinedText.includes("sensor") || combinedText.includes("detect")));
                         if (isRelevant) {
-                            matchedCapSet.add(sup);
+                            matchedCapabilities.add(sup);
                         }
                     });
 
                     const indText = `${ind.companyName || ""} ${indTags.join(" ")}`.toLowerCase();
                     const jaccard = calculateJaccardSimilarity(combinedText, indText);
-                    const sectorMatch = sectors.some(s => s.toLowerCase().includes(predictedCategory.toLowerCase()) || predictedCategory.toLowerCase().includes(s.toLowerCase()));
+                    const sectorMatch = matchedSectors.size > 0;
 
                     // Weights: 50% sector match + 30% support capability fraction + 20% text similarity (Total: 100%)
                     let rawScore = 0;
-                    if ((sectorMatch && matchedCapSet.size > 0) || jaccard > 0.05) {
+                    if ((sectorMatch && matchedCapabilities.size > 0) || (sectorMatch && jaccard > 0.03) || jaccard > 0.05) {
                         const sectorScore = sectorMatch ? 0.50 : 0.0;
-                        const capFraction = supports.length > 0 ? Math.min(1.0, matchedCapSet.size / supports.length) : (matchedCapSet.size > 0 ? 0.5 : 0.0);
+                        const capFraction = supports.length > 0 ? (matchedCapabilities.size / supports.length) : 0.0;
                         const capScore = capFraction * 0.30;
                         const simScore = jaccard * 0.20;
                         rawScore = sectorScore + capScore + simScore;
@@ -272,10 +276,11 @@ async function generateStructuredAiAnalysis({ title, description, location, cate
                         industryId: ind._id,
                         companyName: ind.companyName || "Industry Partner",
                         matchScore: clampedScore,
-                        matchedCapabilities: Array.from(matchedCapSet)
+                        matchedSectors: Array.from(matchedSectors),
+                        matchedCapabilities: Array.from(matchedCapabilities)
                     };
                 })
-                .filter(rec => rec.matchScore >= 0.10 && rec.matchedCapabilities.length > 0); // Minimum 0.10 threshold
+                .filter(rec => rec.matchScore >= 0.10 && (rec.matchedSectors.length > 0 || rec.matchedCapabilities.length > 0)); // Minimum 0.10 threshold
 
             industryRecommendations.sort((a, b) => b.matchScore - a.matchScore);
         }

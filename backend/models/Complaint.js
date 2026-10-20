@@ -96,7 +96,16 @@ const complaintSchema = new mongoose.Schema(
                     trim: true
                 },
                 confidence: {
-                    type: Number
+                    type: Number,
+                    default: null
+                },
+                heuristicConfidence: {
+                    type: Number,
+                    default: null
+                },
+                confidenceType: {
+                    type: String,
+                    trim: true
                 },
                 category: {
                     type: String,
